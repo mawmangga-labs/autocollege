@@ -1,6 +1,7 @@
 import streamlit as st
 from PIL import Image
 import io
+import re
 
 st.set_page_config(
     page_title="Generator Kartu Peserta",
@@ -8,7 +9,8 @@ st.set_page_config(
 )
 
 st.title("Generator Layout Kartu Peserta (F4)")
-st.write("Upload banyak foto lalu generate PDF otomatis.")
+
+st.write("Upload foto lalu sistem akan menyusun otomatis.")
 
 uploaded_files = st.file_uploader(
     "Upload foto",
@@ -16,9 +18,19 @@ uploaded_files = st.file_uploader(
     accept_multiple_files=True
 )
 
+# =====================
+# fungsi ambil angka dari nama file
+# =====================
+
+def extract_number(filename):
+    numbers = re.findall(r'\d+', filename)
+    return int(numbers[0]) if numbers else 999999
+
+
 if uploaded_files:
 
-    uploaded_files = sorted(uploaded_files, key=lambda x: x.name)
+    # sort berdasarkan angka di nama file
+    uploaded_files = sorted(uploaded_files, key=lambda x: extract_number(x.name))
 
     st.write(f"Jumlah foto: {len(uploaded_files)}")
 
@@ -41,7 +53,6 @@ if uploaded_files:
     img_w = cm_to_px(9.5)
     img_h = cm_to_px(7.5)
 
-    # jarak antar kartu
     gap = cm_to_px(0.5)
 
     cols = 2
