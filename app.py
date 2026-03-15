@@ -63,7 +63,7 @@ if template_file and data_file:
     with c3:
         c_pr = st.selectbox("Kolom Program", cols, index=min(4, len(cols)-1))
         # INPUT ANGKA (Ganti Slider)
-        font_size = st.number_input("Ukuran Font (Pixel)", min_value=10, max_value=150, value=45, step=1)
+        font_size = st.number_input("Ukuran Font (Pixel)", min_value=5, max_value=150, value=45, step=1)
 
     col_map = {"nomor": c_no, "nama": c_na, "nisn": c_ni, "ttl": c_tt, "program": c_pr}
 
