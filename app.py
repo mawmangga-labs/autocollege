@@ -10,10 +10,10 @@ st.title("Generator Kartu Peserta")
 # ======================
 
 def font_regular(size):
-    return ImageFont.truetype("times.ttf", size)
+    return ImageFont.truetype("fonts/TimesLTStd-Roman.ttf", size)
 
 def font_bold(size):
-    return ImageFont.truetype("timesbd.ttf", size)
+    return ImageFont.truetype("fonts/TimesLTStd-Bold.ttf", size)
 
 
 # ======================
