@@ -4,18 +4,18 @@ import pandas as pd
 import io
 import math
 
-st.set_page_config(page_title="Generator Kartu F4", layout="wide")
-st.title("🖨️ Generator Kartu (Preview & Auto-Split PDF)")
+st.set_page_config(page_title="Generator Kartu SMAN 1 Batukliang", layout="wide")
 
-# --- Fungsi Helper Font & Draw (Sama seperti sebelumnya) ---
+# --- Fungsi Helper Font ---
 def get_font(font_type, size):
     try:
+        # Gunakan path font lokal Anda
         path = "fonts/TimesLTStd-Bold.ttf" if font_type == "bold" else "fonts/TimesLTStd-Roman.ttf"
-        return ImageFont.truetype(path, size)
+        return ImageFont.truetype(path, int(size))
     except:
         return ImageFont.load_default()
 
-def draw_card(template, row, col_map, boxes):
+def draw_card(template, row, col_map, boxes, font_size_base):
     img = template.copy()
     draw = ImageDraw.Draw(img)
     
@@ -24,102 +24,100 @@ def draw_card(template, row, col_map, boxes):
         x, y, w, h = boxes[field]
         text = str(row[col_map[field]])
         
-        # Tutup Placeholder
+        # 1. Hapus placeholder (Putih)
         draw.rectangle([x, y, x + w, y + h], fill="white")
         
-        # Autofit Text
-        best_size = 10
-        for size in range(40, 8, -1):
-            font = get_font("bold" if field=="nomor" else "regular", size)
-            bbox = draw.textbbox((0, 0), text, font=font)
-            if (bbox[2]-bbox[0]) <= w and (bbox[3]-bbox[1]) <= h:
-                best_size = size
-                break
+        # 2. Pengaturan Font
+        # Jika user input 7.2, kita skalakan sedikit karena ukuran pixel vs point berbeda
+        current_font_size = font_size_base 
+        is_bold = True if field in ["nomor", "nama"] else False
+        font = get_font("bold" if is_bold else "regular", current_font_size)
         
-        font = get_font("bold" if field=="nomor" else "regular", best_size)
+        # 3. Render Teks (Aligment Kiri Tengah)
         bbox = draw.textbbox((0, 0), text, font=font)
-        draw.text((x, y + (h - (bbox[3]-bbox[1])) // 2), text, font=font, fill="black")
+        th = bbox[3] - bbox[1]
+        draw.text((x, y + (h - th) // 2), text, font=font, fill="black")
+        
     return img
 
-# --- UI Upload ---
-template_file = st.file_uploader("1. Upload Template", type=["png", "jpg", "jpeg"])
-data_file = st.file_uploader("2. Upload Data", type=["xlsx", "csv"])
+# --- UI Sidebar & Upload ---
+st.title("🖨️ Generator Kartu Ujian Sekolah")
+
+with st.sidebar:
+    st.header("Pengaturan Layout")
+    font_size = st.slider("Ukuran Font", 10, 80, 45) # Skala pixel biasanya lebih besar dari point
+    st.info("Saran: Gunakan ukuran 40-50 untuk hasil serupa ukuran 7.2pt")
+
+template_file = st.file_uploader("Upload Template Kartu", type=["png", "jpg", "jpeg"])
+data_file = st.file_uploader("Upload Data (Excel/CSV)", type=["xlsx", "csv"])
 
 if template_file and data_file:
     template = Image.open(template_file).convert("RGB")
     df = pd.read_excel(data_file) if data_file.name.endswith("xlsx") else pd.read_csv(data_file)
     
-    col1, col2 = st.columns(2)
-    with col1:
-        c_no = st.selectbox("Kolom Nomor", df.columns)
-        c_na = st.selectbox("Kolom Nama", df.columns)
-        c_ni = st.selectbox("Kolom NISN", df.columns)
-    with col2:
-        c_tt = st.selectbox("Kolom TTL", df.columns)
-        c_pr = st.selectbox("Kolom Program", df.columns)
+    # Mapping Kolom
+    cols = list(df.columns)
+    c1, c2 = st.columns(2)
+    with c1:
+        c_no = st.selectbox("Kolom Nomor Peserta", cols, index=min(0, len(cols)-1))
+        c_na = st.selectbox("Kolom Nama Peserta", cols, index=min(1, len(cols)-1))
+        c_ni = st.selectbox("Kolom NISN", cols, index=min(2, len(cols)-1))
+    with c2:
+        c_tt = st.selectbox("Kolom Tempat & Tgl Lahir", cols, index=min(3, len(cols)-1))
+        c_pr = st.selectbox("Kolom Program", cols, index=min(4, len(cols)-1))
 
     col_map = {"nomor": c_no, "nama": c_na, "nisn": c_ni, "ttl": c_tt, "program": c_pr}
+
+    # KOORDINAT BERDASARKAN GAMBAR TEMPLATE (X, Y, W, H)
+    # Sesuaikan Y agar pas di depan titik dua masing-masing baris
     boxes = {
-        "nomor": (540, 410, 480, 45), "nama": (540, 460, 480, 45),
-        "nisn": (540, 510, 480, 45), "ttl": (540, 560, 480, 45), "program": (540, 610, 480, 45)
+        "nomor":   (470, 410, 450, 48),
+        "nama":    (470, 460, 450, 48),
+        "nisn":    (470, 510, 450, 48),
+        "ttl":     (470, 560, 450, 48),
+        "program": (470, 610, 450, 48)
     }
 
-    # --- BAGIAN PREVIEW ---
-    st.subheader("👀 Preview (3 Data Pertama)")
-    preview_cols = st.columns(3)
-    for i in range(min(3, len(df))):
-        p_img = draw_card(template, df.iloc[i], col_map, boxes)
-        preview_cols[i].image(p_img, caption=f"Preview: {df.iloc[i][c_na]}", use_container_width=True)
+    # --- Preview ---
+    st.subheader("🔍 Preview")
+    preview_img = draw_card(template, df.iloc[0], col_map, boxes, font_size)
+    st.image(preview_img, width=500)
 
-    st.divider()
-
-    # --- PROSES GENERATE & SPLIT ---
-    st.subheader("💾 Download PDF (Per 10 Halaman / 80 Kartu)")
-    
-    if st.button("Siapkan File Download"):
-        # 1. Generate semua kartu ke memori (hanya gambar kartu)
-        all_cards = []
-        progress_bar = st.progress(0)
-        for i, (_, row) in enumerate(df.iterrows()):
-            all_cards.append(draw_card(template, row, col_map, boxes))
-            progress_bar.progress((i + 1) / len(df))
-
-        # 2. Susun ke Halaman F4
+    # --- Proses ---
+    if st.button("🚀 Generate & Pecah PDF"):
+        all_cards = [draw_card(template, row, col_map, boxes, font_size) for _, row in df.iterrows()]
+        
+        # Setting F4
         page_w, page_h = 2540, 3900 
         card_w, card_h = template.size
         spacing = 60
         start_x = (page_w - ((card_w * 2) + spacing)) // 2
         start_y = (page_h - ((card_h * 4) + (spacing * 3))) // 2
 
-        all_pages = []
+        pages = []
         for i in range(0, len(all_cards), 8):
             page = Image.new("RGB", (page_w, page_h), "white")
             batch = all_cards[i:i+8]
             for j, card in enumerate(batch):
-                page.paste(card, (start_x + (j%2)*(card_w+spacing), start_y + (j//2)*(card_h+spacing)))
-            all_pages.append(page)
+                pos_x = start_x + (j % 2) * (card_w + spacing)
+                pos_y = start_y + (j // 2) * (card_h + spacing)
+                page.paste(card, (pos_x, pos_y))
+            pages.append(page)
 
-        # 3. Split PDF per 10 Halaman
+        # Download per 10 Halaman
         limit = 10
-        total_files = math.ceil(len(all_pages) / limit)
-        
-        for f_idx in range(total_files):
+        for f_idx in range(math.ceil(len(pages) / limit)):
             start_p = f_idx * limit
             end_p = start_p + limit
-            pdf_batch = all_pages[start_p:end_p]
+            pdf_batch = pages[start_p:end_p]
             
-            pdf_io = io.BytesIO()
-            pdf_batch[0].save(
-                pdf_io, format="PDF", save_all=True, 
-                append_images=pdf_batch[1:], resolution=300.0
-            )
-            pdf_io.seek(0)
+            output = io.BytesIO()
+            pdf_batch[0].save(output, format="PDF", save_all=True, append_images=pdf_batch[1:], resolution=300.0)
+            output.seek(0)
             
             st.download_button(
-                label=f"📥 Download Bagian {f_idx + 1} (Hal {start_p+1}-{min(end_p, len(all_pages))})",
-                data=pdf_io,
-                file_name=f"kartu_part_{f_idx+1}.pdf",
-                mime="application/pdf",
+                label=f"📥 Download Part {f_idx+1} (Hal {start_p+1}-{min(end_p, len(pages))})",
+                data=output,
+                file_name=f"kartu_ujian_part_{f_idx+1}.pdf",
                 key=f"dl_{f_idx}"
             )
-        st.success("File siap! Silakan klik tombol di atas satu per satu.")
