@@ -25,28 +25,50 @@ def draw_card(template, row, col_map, font_size_base, x_offset_manual, y_offset_
     y_cm_list = [3.09, 3.51, 3.93, 4.35, 4.78]
     fields = ["nomor", "nama", "nisn", "ttl", "program"]
     
-    box_w_px = int(4.0 * px_per_cm_x)
+    # PADDING & BOUNDARY
+    # box_w_px adalah area putih untuk menghapus placeholder
+    box_w_px = int(4.0 * px_per_cm_x) 
     box_h_px = int(0.42 * px_per_cm_y)
+    
+    # safe_limit_w adalah batas teks sebelum dia harus mengecil (diberi padding 0.2cm dari kanan)
+    padding_x_px = int(0.2 * px_per_cm_x)
+    safe_limit_w = box_w_px - (padding_x_px * 2)
 
     for i, field in enumerate(fields):
         curr_x = int(x_cm * px_per_cm_x) + x_offset_manual
         curr_y = int(y_cm_list[i] * px_per_cm_y)
         
         text = str(row[col_map[field]]) if pd.notna(row[col_map[field]]) else ""
+        
+        # 1. Hapus Placeholder
         draw.rectangle([curr_x, curr_y, curr_x + box_w_px, curr_y + box_h_px], fill="white")
         
         is_bold = True if field in ["nomor", "nama"] else False
-        font = get_font("bold" if is_bold else "regular", font_size_base)
         
+        # 2. LOGIKA AUTO-SHRINK DENGAN PADDING
+        current_size = font_size_base
+        font = get_font("bold" if is_bold else "regular", current_size)
         bbox = draw.textbbox((0, 0), text, font=font)
+        text_w = bbox[2] - bbox[0]
+
+        # Teks akan mengecil jika lebih lebar dari safe_limit_w (sudah dikurangi padding)
+        while text_w > safe_limit_w and current_size > 10:
+            current_size -= 1
+            font = get_font("bold" if is_bold else "regular", current_size)
+            bbox = draw.textbbox((0, 0), text, font=font)
+            text_w = bbox[2] - bbox[0]
+
+        # 3. RENDER TEKS
         th = bbox[3] - bbox[1]
         final_y = curr_y + (box_h_px - th) // 2 + y_offset_manual
         
-        draw.text((curr_x, final_y), text, font=font, fill="black")
+        # Gambar teks dengan sedikit offset X agar ada jarak dari titik dua (padding kiri)
+        draw.text((curr_x + padding_x_px, final_y), text, font=font, fill="black")
         
     return img
 
-st.title("🖨️ Generator Kartu Ujian (Live Calibration)")
+# --- UI REMAINS THE SAME ---
+st.title("🖨️ Generator Kartu Ujian (Safe Padding Mode)")
 
 template_file = st.file_uploader("1. Upload Template (9.5 x 7.5 cm)", type=["png", "jpg", "jpeg"])
 data_file = st.file_uploader("2. Upload Data Excel", type=["xlsx", "csv"])
@@ -61,7 +83,6 @@ if template_file and data_file:
             if kw.lower() in str(o).lower(): return i
         return 0
 
-    # --- MAIN LAYOUT ---
     main_col_left, main_col_right = st.columns([1, 2])
 
     with main_col_left:
@@ -71,14 +92,11 @@ if template_file and data_file:
         c_ni = st.selectbox("Kolom NISN", cols, index=find_idx("nisn", cols))
         c_tt = st.selectbox("Kolom TTL", cols, index=find_idx("tgl", cols))
         c_pr = st.selectbox("Kolom Program", cols, index=find_idx("program", cols))
-        
         st.divider()
         generate_btn = st.button("🚀 Generate & Pecah PDF (F4)", use_container_width=True)
 
     with main_col_right:
         st.subheader("🔍 Preview & Kalibrasi")
-        
-        # Sub-kolom untuk menaruh Preview dan Kontrol berdampingan
         prev_col, ctrl_col = st.columns([3, 1])
         
         with ctrl_col:
@@ -86,24 +104,21 @@ if template_file and data_file:
             f_size = st.number_input("Font Size", 10, 150, 42)
             x_off = st.number_input("Geser X", value=0, step=1)
             y_off = st.number_input("Geser Y", value=0, step=1)
-            st.caption("Tips: Gunakan angka negatif untuk naik/kiri")
+            st.caption("Auto-shrink aktif dengan padding 0.2cm.")
 
         col_map = {"nomor": c_no, "nama": c_na, "nisn": c_ni, "ttl": c_tt, "program": c_pr}
         
         with prev_col:
             preview = draw_card(template, df.iloc[0], col_map, f_size, x_off, y_off)
-            st.image(preview, use_container_width=True, caption="Pratinjau real-time")
+            st.image(preview, use_container_width=True)
 
-    # --- LOGIKA GENERATE ---
     if generate_btn:
-        with st.spinner("Memproses seluruh data..."):
+        with st.spinner("Memproses..."):
             all_cards = [draw_card(template, row, col_map, f_size, x_off, y_off) for _, row in df.iterrows()]
-            
             page_w, page_h = 2540, 3900 
             card_w, card_h = template.size
             f4_px_per_cm = page_w / 21.5
             spacing = int(0.5 * f4_px_per_cm) 
-            
             grid_w = (card_w * 2) + spacing
             grid_h = (card_h * 4) + (spacing * 3)
             start_x = (page_w - grid_w) // 2
@@ -119,10 +134,9 @@ if template_file and data_file:
                     page.paste(card, (px, py))
                 pages.append(page)
 
-            st.success(f"Berhasil! Total {len(pages)} halaman.")
-            
+            st.success(f"Berhasil! Tersedia {len(pages)} halaman.")
             limit = 10
-            dl_cols = st.columns(3) # Tampilkan tombol download dalam grid agar hemat tempat
+            dl_cols = st.columns(3)
             for f_idx in range(math.ceil(len(pages) / limit)):
                 out = io.BytesIO()
                 batch = pages[f_idx*limit : (f_idx+1)*limit]
