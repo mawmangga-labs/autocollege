@@ -39,7 +39,7 @@ def draw_card(template, row, col_map, font_size_base, x_offset_manual, y_offset_
         text = str(row[col_map[field]]) if pd.notna(row[col_map[field]]) else ""
         draw.rectangle([curr_x, curr_y, curr_x + dynamic_box_w, curr_y + box_h_px], fill="white")
         
-        is_bold = True if field in ["nomor", "nama"] else False
+        is_bold = True if field in ["nomor"] else False
         current_size = font_size_base
         font = get_font("bold" if is_bold else "regular", current_size)
         
