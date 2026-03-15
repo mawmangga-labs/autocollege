@@ -2,3 +2,5 @@ streamlit
 pillow
 pandas
 openpyxl
+pytesseract
+opencv-python-headless
