@@ -18,46 +18,35 @@ def draw_card(template, row, col_map, font_size_base, x_offset_manual, y_offset_
     w_px, h_px = img.size
     draw = ImageDraw.Draw(img)
     
-    # Rasio pixel per cm (Asumsi template 9.5 x 7.5 cm)
     px_per_cm_x = w_px / 9.5
     px_per_cm_y = h_px / 7.5
 
-    # Koordinat CM dari User
     x_cm = 5.37
     y_cm_list = [3.09, 3.51, 3.93, 4.35, 4.78]
     fields = ["nomor", "nama", "nisn", "ttl", "program"]
     
-    # Ukuran box pembersih (lebar 4cm, tinggi disesuaikan)
     box_w_px = int(4.0 * px_per_cm_x)
     box_h_px = int(0.42 * px_per_cm_y)
 
     for i, field in enumerate(fields):
-        # Konversi CM ke Pixel + Manual Offset X
         curr_x = int(x_cm * px_per_cm_x) + x_offset_manual
         curr_y = int(y_cm_list[i] * px_per_cm_y)
         
         text = str(row[col_map[field]]) if pd.notna(row[col_map[field]]) else ""
-        
-        # 1. Hapus Placeholder (Warna Putih)
         draw.rectangle([curr_x, curr_y, curr_x + box_w_px, curr_y + box_h_px], fill="white")
         
-        # 2. Setup Font
         is_bold = True if field in ["nomor", "nama"] else False
         font = get_font("bold" if is_bold else "regular", font_size_base)
         
-        # 3. Hitung Posisi Teks agar Center secara Vertikal di dalam Box
         bbox = draw.textbbox((0, 0), text, font=font)
         th = bbox[3] - bbox[1]
-        
-        # final_y menggunakan Manual Offset Y
         final_y = curr_y + (box_h_px - th) // 2 + y_offset_manual
         
         draw.text((curr_x, final_y), text, font=font, fill="black")
         
     return img
 
-# --- UI ---
-st.title("🖨️ Generator Kartu Ujian (Kalibrasi X & Y)")
+st.title("🖨️ Generator Kartu Ujian (Live Calibration)")
 
 template_file = st.file_uploader("1. Upload Template (9.5 x 7.5 cm)", type=["png", "jpg", "jpeg"])
 data_file = st.file_uploader("2. Upload Data Excel", type=["xlsx", "csv"])
@@ -65,8 +54,6 @@ data_file = st.file_uploader("2. Upload Data Excel", type=["xlsx", "csv"])
 if template_file and data_file:
     template = Image.open(template_file).convert("RGB")
     df = pd.read_excel(data_file) if data_file.name.endswith("xlsx") else pd.read_csv(data_file)
-    
-    st.subheader("⚙️ Konfigurasi & Kalibrasi")
     cols = list(df.columns)
     
     def find_idx(kw, opts):
@@ -74,41 +61,46 @@ if template_file and data_file:
             if kw.lower() in str(o).lower(): return i
         return 0
 
-    # Layout Kontrol (5 Kolom agar rapi)
-    c1, c2, c3, c4, c5 = st.columns([2, 2, 1, 1, 1])
-    with c1:
+    # --- MAIN LAYOUT ---
+    main_col_left, main_col_right = st.columns([1, 2])
+
+    with main_col_left:
+        st.subheader("📋 Pilih Kolom Data")
         c_no = st.selectbox("Kolom Nomor", cols, index=find_idx("nomor", cols))
         c_na = st.selectbox("Kolom Nama", cols, index=find_idx("nama", cols))
-    with c2:
         c_ni = st.selectbox("Kolom NISN", cols, index=find_idx("nisn", cols))
         c_tt = st.selectbox("Kolom TTL", cols, index=find_idx("tgl", cols))
-    with c3:
         c_pr = st.selectbox("Kolom Program", cols, index=find_idx("program", cols))
-    with c4:
-        f_size = st.number_input("Ukuran Font", 10, 150, 42)
-    with c5:
-        x_off = st.number_input("Geser X (Px)", value=0, step=1)
-        y_off = st.number_input("Geser Y (Px)", value=0, step=1)
+        
+        st.divider()
+        generate_btn = st.button("🚀 Generate & Pecah PDF (F4)", use_container_width=True)
 
-    col_map = {"nomor": c_no, "nama": c_na, "nisn": c_ni, "ttl": c_tt, "program": c_pr}
+    with main_col_right:
+        st.subheader("🔍 Preview & Kalibrasi")
+        
+        # Sub-kolom untuk menaruh Preview dan Kontrol berdampingan
+        prev_col, ctrl_col = st.columns([3, 1])
+        
+        with ctrl_col:
+            st.write("🔧 **Tune**")
+            f_size = st.number_input("Font Size", 10, 150, 42)
+            x_off = st.number_input("Geser X", value=0, step=1)
+            y_off = st.number_input("Geser Y", value=0, step=1)
+            st.caption("Tips: Gunakan angka negatif untuk naik/kiri")
 
-    st.divider()
-    
-    st.subheader("🔍 Preview Kalibrasi")
-    # Tampilkan preview dengan offset X dan Y
-    preview = draw_card(template, df.iloc[0], col_map, f_size, x_off, y_off)
-    st.image(preview, width=700)
-    
-    st.caption("Gunakan angka negatif untuk geser ke Kiri (X) atau ke Atas (Y).")
+        col_map = {"nomor": c_no, "nama": c_na, "nisn": c_ni, "ttl": c_tt, "program": c_pr}
+        
+        with prev_col:
+            preview = draw_card(template, df.iloc[0], col_map, f_size, x_off, y_off)
+            st.image(preview, use_container_width=True, caption="Pratinjau real-time")
 
-    if st.button("🚀 Generate & Pecah PDF (F4)", use_container_width=True):
-        with st.spinner("Memproses..."):
+    # --- LOGIKA GENERATE ---
+    if generate_btn:
+        with st.spinner("Memproses seluruh data..."):
             all_cards = [draw_card(template, row, col_map, f_size, x_off, y_off) for _, row in df.iterrows()]
             
-            # Setting Kertas F4 (300 DPI)
             page_w, page_h = 2540, 3900 
             card_w, card_h = template.size
-            
             f4_px_per_cm = page_w / 21.5
             spacing = int(0.5 * f4_px_per_cm) 
             
@@ -127,12 +119,14 @@ if template_file and data_file:
                     page.paste(card, (px, py))
                 pages.append(page)
 
-            st.success(f"Berhasil! Tersedia {len(pages)} halaman.")
+            st.success(f"Berhasil! Total {len(pages)} halaman.")
             
             limit = 10
+            dl_cols = st.columns(3) # Tampilkan tombol download dalam grid agar hemat tempat
             for f_idx in range(math.ceil(len(pages) / limit)):
                 out = io.BytesIO()
                 batch = pages[f_idx*limit : (f_idx+1)*limit]
                 batch[0].save(out, format="PDF", save_all=True, append_images=batch[1:] if len(batch) > 1 else [], resolution=300.0)
                 out.seek(0)
-                st.download_button(f"📥 Download Part {f_idx+1}", out, f"kartu_part_{f_idx+1}.pdf", key=f"d_{f_idx}")
+                with dl_cols[f_idx % 3]:
+                    st.download_button(f"📥 Part {f_idx+1}", out, f"kartu_ujian_part_{f_idx+1}.pdf", key=f"d_{f_idx}")
