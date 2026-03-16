@@ -30,7 +30,7 @@ def draw_card(template, row, col_map, font_size_base, x_off, y_off, line_spacing
     fields = ["nomor", "nama", "nisn", "ttl", "program"]
     
     # Batas lebar untuk auto-shrink (asumsi lebar area teks ~4cm)
-    safe_limit_w = int(3.8 * px_per_cm_x)
+    safe_limit_w = int(4 * px_per_cm_x)
 
     for i, field in enumerate(fields):
         curr_x = int(x_cm_base * px_per_cm_x) + x_off
