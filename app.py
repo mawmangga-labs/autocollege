@@ -109,7 +109,7 @@ if t_file and d_file:
             x_off = st.number_input("Geser X (Px)", value=0)
             y_off = st.number_input("Geser Y (Px)", value=0)
             # FITUR BARU: Spacing antar baris
-            l_space = st.number_input("Spacing Baris (Px)", value=0, step=1)
+            l_space = st.number_input("Spacing Baris (Px)", value=0, step=0.5)
             
         with prev_area:
             preview_img = draw_card(template, df.iloc[0], col_map, f_size, x_off, y_off, l_space)
