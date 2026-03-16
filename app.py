@@ -15,7 +15,7 @@ def get_font(font_type, size):
         return ImageFont.load_default()
 
 # --- 2. Fungsi Menggambar Satu Kartu ---
-def draw_card(template, row, col_map, font_size_base, x_offset_manual, y_offset_manual):
+def draw_card(template, row, col_map, font_size_base, x_off, y_off, line_spacing):
     img = template.copy()
     w_px, h_px = img.size
     draw = ImageDraw.Draw(img)
@@ -23,45 +23,44 @@ def draw_card(template, row, col_map, font_size_base, x_offset_manual, y_offset_
     px_per_cm_x = w_px / 9.5
     px_per_cm_y = h_px / 7.5
 
+    # Titik awal koordinat CM
     x_cm_base = 5.26
-    y_cm_list = [2.68, 2.97, 3.26, 3.55, 3.84]
+    y_cm_start = 2.68 # Titik y baris pertama
+    
     fields = ["nomor", "nama", "nisn", "ttl", "program"]
     
-    right_limit_px = int(9.3 * px_per_cm_x) 
-    box_h_px = int(0.42 * px_per_cm_y)      
-    inner_padding_px = int(0.15 * px_per_cm_x) 
+    # Batas lebar untuk auto-shrink (asumsi lebar area teks ~4cm)
+    safe_limit_w = int(3.8 * px_per_cm_x)
 
     for i, field in enumerate(fields):
-        curr_x = int(x_cm_base * px_per_cm_x) + x_offset_manual
-        curr_y = int(y_cm_list[i] * px_per_cm_y)
-        
-        dynamic_box_w = max(10, right_limit_px - curr_x)
-        safe_limit_w = dynamic_box_w - (inner_padding_px * 2)
+        curr_x = int(x_cm_base * px_per_cm_x) + x_off
+        # Kalkulasi Y: Titik awal + (urutan baris * (jarak dasar + spacing manual))
+        # Jarak dasar antar baris kita set ~0.29cm (sesuai list awalmu) dikali rasio pixel
+        base_step = int(0.29 * px_per_cm_y)
+        curr_y = int(y_cm_start * px_per_cm_y) + (i * (base_step + line_spacing)) + y_off
         
         text = str(row[col_map[field]]) if pd.notna(row[col_map[field]]) else ""
-        draw.rectangle([curr_x, curr_y, curr_x + dynamic_box_w, curr_y + box_h_px], fill="white")
         
         is_bold = True if field in ["nomor"] else False
         current_size = font_size_base
         font = get_font("bold" if is_bold else "regular", current_size)
         
+        # Auto-shrink logic
         bbox = draw.textbbox((0, 0), text, font=font)
         text_w = bbox[2] - bbox[0]
-
         while text_w > safe_limit_w and current_size > 10:
             current_size -= 1
             font = get_font("bold" if is_bold else "regular", current_size)
             bbox = draw.textbbox((0, 0), text, font=font)
             text_w = bbox[2] - bbox[0]
 
-        th = bbox[3] - bbox[1]
-        final_y = curr_y + (box_h_px - th) // 2 + y_offset_manual
-        draw.text((curr_x + inner_padding_px, final_y), text, font=font, fill="black")
+        # Gambar teks langsung (tanpa rectangle putih)
+        draw.text((curr_x, curr_y), text, font=font, fill="black")
         
     return img
 
 # --- 3. UI ---
-st.title("🖨️ Generator Kartu Ujian (Range Selector)")
+st.title("🖨️ Generator Kartu Ujian (No Whitebox & Custom Spacing)")
 
 t_file = st.file_uploader("1. Upload Template (9.5 x 7.5 cm)", type=["png", "jpg", "jpeg"])
 d_file = st.file_uploader("2. Upload Data Excel", type=["xlsx", "csv"])
@@ -88,8 +87,7 @@ if t_file and d_file:
         col_map = {"nomor": c_no, "nama": c_na, "nisn": c_ni, "ttl": c_tt, "program": c_pr}
         
         st.write("---")
-        # RANGE SELECTOR
-        st.write("🔢 **Pilih Rentang Data (Berdasarkan Baris)**")
+        st.write("🔢 **Pilih Rentang Data**")
         total_rows = len(df_full)
         range_cols = st.columns(2)
         with range_cols[0]:
@@ -97,9 +95,8 @@ if t_file and d_file:
         with range_cols[1]:
             end_row = st.number_input("Hingga Baris", min_value=1, max_value=total_rows, value=total_rows)
         
-        # Slice Data
         df = df_full.iloc[start_row-1 : end_row]
-        st.info(f"Akan memproses {len(df)} data (Baris {start_row} s.d {end_row})")
+        st.info(f"Memproses {len(df)} data.")
 
         st.divider()
         generate_btn = st.button("🚀 GENERATE SINGLE PDF", use_container_width=True, type="primary")
@@ -111,9 +108,11 @@ if t_file and d_file:
             f_size = st.number_input("Ukuran Font", 10, 150, 42)
             x_off = st.number_input("Geser X (Px)", value=0)
             y_off = st.number_input("Geser Y (Px)", value=0)
+            # FITUR BARU: Spacing antar baris
+            l_space = st.number_input("Spacing Baris (Px)", value=0, step=1)
+            
         with prev_area:
-            # Preview selalu ambil data pertama dari rentang yang dipilih
-            preview_img = draw_card(template, df.iloc[0], col_map, f_size, x_off, y_off)
+            preview_img = draw_card(template, df.iloc[0], col_map, f_size, x_off, y_off, l_space)
             st.image(preview_img, use_container_width=True, caption=f"Preview Baris {start_row}")
 
     # --- 4. Logika Generate ---
@@ -122,10 +121,10 @@ if t_file and d_file:
             page_w, page_h = 2540, 3900 
             card_w, card_h = template.size
             f4_px_per_cm = page_w / 21.5
-            spacing = int(0.5 * f4_px_per_cm) 
+            spacing_f4 = int(0.5 * f4_px_per_cm) 
             
-            grid_w = (card_w * 2) + spacing
-            grid_h = (card_h * 4) + (spacing * 3)
+            grid_w = (card_w * 2) + spacing_f4
+            grid_h = (card_h * 4) + (spacing_f4 * 3)
             start_x = (page_w - grid_w) // 2
             start_y = (page_h - grid_h) // 2
 
@@ -134,14 +133,13 @@ if t_file and d_file:
             
             for i in range(0, len(df), 8):
                 progress_bar.progress(min((i + 8) / len(df), 1.0))
-                
                 page = Image.new("RGB", (page_w, page_h), "white")
                 batch_df = df.iloc[i : i+8]
                 
                 for j, (_, row) in enumerate(batch_df.iterrows()):
-                    card_img = draw_card(template, row, col_map, f_size, x_off, y_off)
-                    pos_x = start_x + (j % 2) * (card_w + spacing)
-                    pos_y = start_y + (j // 2) * (card_h + spacing)
+                    card_img = draw_card(template, row, col_map, f_size, x_off, y_off, l_space)
+                    pos_x = start_x + (j % 2) * (card_w + spacing_f4)
+                    pos_y = start_y + (j // 2) * (card_h + spacing_f4)
                     page.paste(card_img, (pos_x, pos_y))
                     card_img.close()
                 
