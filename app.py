@@ -23,8 +23,8 @@ def draw_card(template, row, col_map, font_size_base, x_offset_manual, y_offset_
     px_per_cm_x = w_px / 9.5
     px_per_cm_y = h_px / 7.5
 
-    x_cm_base = 5.37
-    y_cm_list = [3.09, 3.51, 3.93, 4.35, 4.78]
+    x_cm_base = 5.26
+    y_cm_list = [2.68, 2.97, 3.26, 3.55, 3.84]
     fields = ["nomor", "nama", "nisn", "ttl", "program"]
     
     right_limit_px = int(9.3 * px_per_cm_x) 
