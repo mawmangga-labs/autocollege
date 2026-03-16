@@ -62,7 +62,7 @@ def draw_card(template, row, col_map, font_size_base, x_off, y_off, line_spacing
 # --- 3. UI ---
 st.title("🖨️ Generator Kartu Ujian (No Whitebox & Custom Spacing)")
 
-t_file = st.file_uploader("1. Upload Template (9.5 x 7.5 cm)", type=["png", "jpg", "jpeg"])
+t_file = st.file_uploader("1. Upload Template", type=["png", "jpg", "jpeg"])
 d_file = st.file_uploader("2. Upload Data Excel", type=["xlsx", "csv"])
 
 if t_file and d_file:
@@ -105,7 +105,7 @@ if t_file and d_file:
         st.subheader("🔍 Kalibrasi")
         prev_area, ctrl_area = st.columns([2.5, 1])
         with ctrl_area:
-            f_size = st.number_input("Ukuran Font", 10, 150, 42)
+            f_size = st.number_input("Ukuran Font", 10, 150, 35)
             x_off = st.number_input("Geser X (Px)", value=0)
             y_off = st.number_input("Geser Y (Px)", value=0)
             # FITUR BARU: Spacing antar baris
@@ -118,7 +118,7 @@ if t_file and d_file:
     # --- 4. Logika Generate ---
     if generate_btn:
         with st.spinner(f"Memproses {len(df)} kartu..."):
-            page_w, page_h = 2540, 3900 
+            page_w, page_h = 2480, 3508 
             card_w, card_h = template.size
             f4_px_per_cm = page_w / 21.5
             spacing_f4 = int(0.5 * f4_px_per_cm) 
